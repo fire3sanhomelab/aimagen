@@ -94,7 +94,7 @@ erDiagram
     VIDEO_JOB {
         string id UUID
         string prompt
-        string status "queued|processing|completed"
+        string status "queued / processing / completed"
         int progress 0-100
         int createdAt Unix
     }
