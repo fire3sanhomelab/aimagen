@@ -49,6 +49,59 @@ aimagen/
 
 ---
 
+## 🏗️ Architecture
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FE as Vue 3 (Nginx)
+    participant BE as Express :3457
+    participant PR as Provider Registry
+    participant AI as Cloud / Local
+
+    U->>FE: Enter prompt / Upload image
+    FE->>BE: POST /api/generate { prompt, provider? }
+    BE->>PR: getProvider(name || env default)
+    PR-->>BE: Provider instance
+    BE->>AI: provider.generate(prompt)
+    AI-->>BE: { imageBase64, provider }
+    BE->>BE: Save to gallery.json
+    BE-->>FE: { success, imageUrl, provider }
+    FE-->>U: Display image
+
+    Note over PR,AI: Switch via AI_IMAGE_PROVIDER env or per-request
+```
+
+### Provider Registry
+
+```mermaid
+erDiagram
+    PROVIDER {
+        string name
+        object features
+        string baseUrl
+        boolean health
+    }
+    GALLERY {
+        string id UUID
+        string prompt
+        string provider
+        string imageUrl
+        int createdAt Unix
+    }
+    VIDEO_JOB {
+        string id UUID
+        string prompt
+        string status "queued|processing|completed"
+        int progress 0-100
+        int createdAt Unix
+    }
+```
+
+---
+
 ## ✨ Features
 
 | Feature | Description |
