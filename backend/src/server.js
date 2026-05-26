@@ -2,11 +2,10 @@ import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
 import { v4 as uuidv4 } from 'uuid'
-import fetch from 'node-fetch'
-import { createServer } from 'http'
 import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { getProvider, listProviders, healthCheckAll } from './providers/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -14,12 +13,10 @@ const ROOT = path.join(__dirname, '..')
 
 // ===== CONFIG =====
 const PORT = process.env.PORT || 3456
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
-const LLM_STUDIO_URL = process.env.LLM_STUDIO_URL || 'http://192.168.1.100:1234'
+const AI_PROVIDER = process.env.AI_IMAGE_PROVIDER || 'opencode-go'
 
 // ===== APP SETUP =====
 const app = express()
-const server = createServer(app)
 
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
@@ -51,78 +48,81 @@ async function writeData(file, data) {
 }
 
 // ===== HEALTH =====
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'aimagen', version: '1.0.0', time: new Date().toISOString() })
+app.get('/api/health', async (req, res) => {
+  const providerHealth = await healthCheckAll()
+  res.json({
+    status: 'ok',
+    service: 'aimagen',
+    version: '1.0.0',
+    activeProvider: AI_PROVIDER,
+    providers: providerHealth,
+    time: new Date().toISOString()
+  })
+})
+
+// ===== PROVIDER MANAGEMENT =====
+app.get('/api/providers', (req, res) => {
+  res.json({
+    active: AI_PROVIDER,
+    available: listProviders()
+  })
+})
+
+app.get('/api/providers/:name/models', async (req, res) => {
+  try {
+    const provider = getProvider(req.params.name)
+    const models = await provider.getModels()
+    res.json({ provider: req.params.name, models })
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
 })
 
 // ===== GENERATE IMAGE =====
 app.post('/api/generate', async (req, res) => {
-  const { prompt, negativePrompt = '', width = 512, height = 512, seed, model } = req.body
+  const {
+    prompt,
+    negativePrompt = '',
+    width = 512,
+    height = 512,
+    seed,
+    model,
+    provider: providerName
+  } = req.body
 
-  const endpoints = [
-    {
-      name: 'ollama-image',
-      url: `${OLLAMA_URL}/api/generate`,
-      body: {
-        model: model || 'opencode-go/kimi-k2.6',
-        prompt,
-        images: [],
-        stream: false
-      }
-    },
-    {
-      name: 'llm-studio',
-      url: `${LLM_STUDIO_URL}/v1/images/generations`,
-      body: {
-        prompt,
-        n: 1,
-        size: `${width}x${height}`,
-        ...(seed && { seed })
-      }
+  try {
+    const provider = getProvider(providerName)
+    const result = await provider.generate({ prompt, negativePrompt, width, height, seed, model })
+
+    // Save to gallery
+    const gallery = await readData('gallery.json')
+    const item = {
+      id: uuidv4(),
+      prompt,
+      negativePrompt,
+      width,
+      height,
+      seed,
+      model: result.model || model,
+      provider: result.provider,
+      imageUrl: result.imageUrl,
+      imageBase64: result.imageBase64,
+      createdAt: Date.now()
     }
-  ]
+    gallery.unshift(item)
+    if (gallery.length > 200) gallery.pop()
+    await writeData('gallery.json', gallery)
 
-  for (const ep of endpoints) {
-    try {
-      const response = await fetch(ep.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ep.body)
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-
-        // Save to gallery
-        const gallery = await readData('gallery.json')
-        const item = {
-          id: uuidv4(),
-          prompt,
-          negativePrompt,
-          width,
-          height,
-          seed,
-          model: ep.name,
-          imageUrl: data.images?.[0]?.url || data.image,
-          createdAt: Date.now()
-        }
-        gallery.unshift(item)
-        if (gallery.length > 200) gallery.pop()
-        await writeData('gallery.json', gallery)
-
-        return res.json({ success: true, ...item })
-      }
-    } catch (e) {
-      console.warn(`${ep.name} failed:`, e.message)
-    }
+    res.json({ success: true, ...item })
+  } catch (e) {
+    console.error('Generation failed:', e.message)
+    res.status(503).json({ error: e.message, provider: providerName || AI_PROVIDER })
   }
-
-  res.status(503).json({ error: 'All generation endpoints unavailable' })
 })
 
 // ===== GENERATE VIDEO =====
 app.post('/api/generate-video', async (req, res) => {
-  const { prompt, duration = 5, fps = 24 } = req.body
+  const { prompt, duration = 5, fps = 24, provider: providerName } = req.body
 
   const jobs = await readData('video-jobs.json')
   const job = {
@@ -130,6 +130,7 @@ app.post('/api/generate-video', async (req, res) => {
     prompt,
     duration,
     fps,
+    provider: providerName || AI_PROVIDER,
     status: 'queued',
     progress: 0,
     createdAt: Date.now()
@@ -137,6 +138,7 @@ app.post('/api/generate-video', async (req, res) => {
   jobs.push(job)
   await writeData('video-jobs.json', jobs)
 
+  // Placeholder: actual video gen would use a provider that supports it
   processVideoJob(job)
 
   res.json({ success: true, job })
@@ -181,33 +183,23 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
 
 // ===== IMAGE-TO-IMAGE =====
 app.post('/api/img2img', upload.single('image'), async (req, res) => {
-  const { prompt, strength = 0.75 } = req.body
+  const { prompt, strength = 0.75, provider: providerName } = req.body
 
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' })
 
   try {
+    // Read uploaded image as base64
     const imageBuffer = await fs.readFile(req.file.path)
-    const base64Image = imageBuffer.toString('base64')
+    const imageBase64 = `data:image/png;base64,${imageBuffer.toString('base64')}`
 
-    const response = await fetch(`${LLM_STUDIO_URL}/v1/images/edits`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: `data:image/png;base64,${base64Image}`,
-        prompt,
-        strength: parseFloat(strength)
-      })
-    })
+    const provider = getProvider(providerName)
+    const result = await provider.img2img({ imageBase64, prompt, strength: parseFloat(strength) })
 
-    if (response.ok) {
-      const data = await response.json()
-      return res.json({ success: true, imageUrl: data.data?.[0]?.url })
-    }
+    res.json({ success: true, imageUrl: result.imageUrl, imageBase64: result.imageBase64 })
   } catch (e) {
     console.error('Img2img failed:', e.message)
+    res.status(503).json({ error: e.message })
   }
-
-  res.status(503).json({ error: 'Image-to-image generation failed' })
 })
 
 // ===== JOB STATUS =====
@@ -221,12 +213,22 @@ app.get('/api/jobs/:id', async (req, res) => {
 // ===== STATS =====
 app.get('/api/stats', async (req, res) => {
   const gallery = await readData('gallery.json')
-  res.json({ totalImages: gallery.length })
+  const providerCounts = gallery.reduce((acc, item) => {
+    acc[item.provider] = (acc[item.provider] || 0) + 1
+    return acc
+  }, {})
+
+  res.json({
+    totalImages: gallery.length,
+    byProvider: providerCounts,
+    activeProvider: AI_PROVIDER
+  })
 })
 
 // ===== START =====
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`🚀 aimagen backend running on port ${PORT}`)
-  console.log(`🤖 Ollama: ${OLLAMA_URL}`)
-  console.log(`🖥️  LLM Studio: ${LLM_STUDIO_URL}`)
+  console.log(`🎨 Active provider: ${AI_PROVIDER}`)
+  console.log(`🔄 Available: opencode-go, ollama, llm-studio, comfyui, janus-pro`)
+  console.log(`📋 Switch provider: AI_IMAGE_PROVIDER=<name> or POST /api/generate { provider: '<name>' }`)
 })

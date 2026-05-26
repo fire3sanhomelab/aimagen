@@ -10,8 +10,12 @@ services:
       - "3457:3456"
     environment:
       - PORT=3456
+      - AI_IMAGE_PROVIDER=${AI_IMAGE_PROVIDER:-opencode-go}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - LLM_STUDIO_URL=${LLM_STUDIO_URL:-http://host.docker.internal:1234}
+      - COMFYUI_URL=${COMFYUI_URL:-http://host.docker.internal:8188}
+      - JANUS_PRO_URL=${JANUS_PRO_URL:-http://host.docker.internal:8000}
+      - OPENCODE_API_KEY=${OPENCODE_API_KEY:-}
     volumes:
       - ./backend/data:/app/data
       - ./backend/uploads:/app/uploads
