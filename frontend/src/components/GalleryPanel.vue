@@ -98,7 +98,7 @@ const selectedItem = ref(null)
 async function loadGallery() {
   isLoading.value = true
   try {
-    const res = await fetch(`/api/aimagen/gallery?page=${page.value}&limit=${limit.value}`)
+    const res = await fetch(`/api/gallery?page=${page.value}&limit=${limit.value}`)
     if (res.ok) {
       const data = await res.json()
       items.value = data.items
@@ -139,7 +139,7 @@ async function deleteItem(id) {
   if (!confirm('確定刪除？')) return
   
   try {
-    const res = await fetch(`/api/aimagen/gallery/${id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/gallery/${id}`, { method: 'DELETE' })
     if (res.ok) {
       items.value = items.value.filter(item => item.id !== id)
       selectedItem.value = null

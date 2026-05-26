@@ -193,7 +193,7 @@ async function generate() {
   try {
     const [width, height] = size.value.split('x').map(Number)
     
-    const res = await fetch('/api/aimagen/generate', {
+    const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -230,7 +230,7 @@ async function generateImg2Img() {
   formData.append('strength', strength.value)
   
   try {
-    const res = await fetch('/api/aimagen/img2img', {
+    const res = await fetch('/api/img2img', {
       method: 'POST',
       body: formData
     })
@@ -257,7 +257,7 @@ async function generateVideo() {
   isGenerating.value = true
   
   try {
-    const res = await fetch('/api/aimagen/generate-video', {
+    const res = await fetch('/api/generate-video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

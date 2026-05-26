@@ -91,7 +91,7 @@ async function loadJobs() {
 
 async function pollJobStatus(jobId) {
   try {
-    const res = await fetch(`/api/aimagen/jobs/${jobId}`)
+    const res = await fetch(`/api/jobs/${jobId}`)
     if (res.ok) {
       const data = await res.json()
       const idx = jobs.value.findIndex(j => j.id === jobId)
