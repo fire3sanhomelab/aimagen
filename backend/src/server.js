@@ -6,6 +6,8 @@ import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { getProvider, listProviders, healthCheckAll } from './providers/index.js'
+import { errorHandler } from './middleware/errorHandler.js'
+import { validate } from './middleware/validate.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -47,6 +49,17 @@ async function writeData(file, data) {
   await fs.writeFile(path.join(ROOT, 'data', file), JSON.stringify(data, null, 2))
 }
 
+/**
+ * Sanitize user prompt to prevent injection before passing to providers.
+ * Truncates to 2000 chars — most image gen models have prompt length limits.
+ */
+function sanitizePrompt(str) {
+  if (typeof str !== 'string') return ''
+  return str
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')  // strip control chars
+    .slice(0, 2000)
+}
+
 // ===== HEALTH =====
 app.get('/api/health', async (req, res) => {
   const providerHealth = await healthCheckAll()
@@ -79,16 +92,26 @@ app.get('/api/providers/:name/models', async (req, res) => {
 })
 
 // ===== GENERATE IMAGE =====
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', validate(['prompt']), async (req, res) => {
   const {
-    prompt,
-    negativePrompt = '',
+    prompt: rawPrompt,
+    negativePrompt: rawNegPrompt = '',
     width = 512,
     height = 512,
     seed,
     model,
     provider: providerName
   } = req.body
+
+  const prompt = sanitizePrompt(rawPrompt)
+  const negativePrompt = sanitizePrompt(rawNegPrompt)
+
+  if (!prompt) {
+    const err = new Error('Prompt is required and must be non-empty')
+    err.status = 400
+    err.expose = true
+    throw err
+  }
 
   try {
     const provider = getProvider(providerName)
@@ -121,7 +144,7 @@ app.post('/api/generate', async (req, res) => {
 })
 
 // ===== GENERATE VIDEO =====
-app.post('/api/generate-video', async (req, res) => {
+app.post('/api/generate-video', validate(['prompt']), async (req, res) => {
   const { prompt, duration = 5, fps = 24, provider: providerName } = req.body
 
   const jobs = await readData('video-jobs.json')
@@ -182,7 +205,7 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
 })
 
 // ===== IMAGE-TO-IMAGE =====
-app.post('/api/img2img', upload.single('image'), async (req, res) => {
+app.post('/api/img2img', upload.single('image'), validate(['prompt']), async (req, res) => {
   const { prompt, strength = 0.75, provider: providerName } = req.body
 
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' })
@@ -224,6 +247,9 @@ app.get('/api/stats', async (req, res) => {
     activeProvider: AI_PROVIDER
   })
 })
+
+// ===== ERROR HANDLER (must be last) =====
+app.use(errorHandler)
 
 // ===== START =====
 app.listen(PORT, () => {
