@@ -1,5 +1,4 @@
 import { ImageProvider } from './base.js'
-import fetch from 'node-fetch'
 
 /**
  * Local provider: Janus Pro (via HuggingFace/transformers or dedicated server)
@@ -20,7 +19,7 @@ export class JanusProProvider extends ImageProvider {
   }
 
   async generate({ prompt, negativePrompt = '', width = 512, height = 512, seed, model = 'janus-pro-7b' }) {
-    const response = await fetch(`${this.baseUrl}/generate`, {
+    const response = await this.fetch(`${this.baseUrl}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -56,7 +55,7 @@ export class JanusProProvider extends ImageProvider {
 
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseUrl}/health`)
+      const response = await this.fetch(`${this.baseUrl}/health`)
       return { ok: response.ok, status: response.status }
     } catch (e) {
       return { ok: false, error: e.message }

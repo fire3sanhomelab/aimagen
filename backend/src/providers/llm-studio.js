@@ -72,7 +72,7 @@ export class LLMStudioProvider extends ImageProvider {
 
   async getModels() {
     try {
-      const response = await fetch(`${this.baseUrl}/v1/models`)
+      const response = await this.fetch(`${this.baseUrl}/v1/models`)
       const data = await response.json()
       return (data.data || []).map(m => ({
         id: m.id,
@@ -86,7 +86,7 @@ export class LLMStudioProvider extends ImageProvider {
 
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseUrl}/v1/models`)
+      const response = await this.fetch(`${this.baseUrl}/v1/models`)
       return { ok: response.ok, status: response.status }
     } catch (e) {
       return { ok: false, error: e.message }

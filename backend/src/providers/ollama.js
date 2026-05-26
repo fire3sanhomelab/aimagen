@@ -54,7 +54,7 @@ export class OllamaProvider extends ImageProvider {
 
   async getModels() {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`)
+      const response = await this.fetch(`${this.baseUrl}/api/tags`)
       const data = await response.json()
       return (data.models || []).map(m => ({
         id: m.name,
@@ -71,7 +71,7 @@ export class OllamaProvider extends ImageProvider {
 
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`)
+      const response = await this.fetch(`${this.baseUrl}/api/tags`)
       return { ok: response.ok, status: response.status }
     } catch (e) {
       return { ok: false, error: e.message }

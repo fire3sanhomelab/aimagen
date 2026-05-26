@@ -1,5 +1,4 @@
 import { ImageProvider } from './base.js'
-import fetch from 'node-fetch'
 
 /**
  * Cloud provider: opencode-go (kimi-k2.6, etc.)
@@ -21,7 +20,7 @@ export class OpencodeGoProvider extends ImageProvider {
   }
 
   async generate({ prompt, negativePrompt = '', width = 512, height = 512, seed, model = 'kimi-k2.6' }) {
-    const response = await fetch(`${this.baseUrl}/v1/images/generations`, {
+    const response = await this.fetch(`${this.baseUrl}/v1/images/generations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -53,7 +52,7 @@ export class OpencodeGoProvider extends ImageProvider {
   }
 
   async img2img({ imageBase64, prompt, strength = 0.75 }) {
-    const response = await fetch(`${this.baseUrl}/v1/images/edits`, {
+    const response = await this.fetch(`${this.baseUrl}/v1/images/edits`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,7 +87,7 @@ export class OpencodeGoProvider extends ImageProvider {
 
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseUrl}/v1/models`, {
+      const response = await this.fetch(`${this.baseUrl}/v1/models`, {
         headers: { 'Authorization': `Bearer ${this.apiKey}` }
       })
       return { ok: response.ok, status: response.status }

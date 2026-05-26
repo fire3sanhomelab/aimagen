@@ -1,5 +1,4 @@
 import { ImageProvider } from './base.js'
-import fetch from 'node-fetch'
 import fs from 'fs/promises'
 
 /**
@@ -26,7 +25,7 @@ export class ComfyUIProvider extends ImageProvider {
     const workflow = this.buildText2ImgWorkflow({ prompt, negativePrompt, width, height, seed })
 
     // Queue the prompt
-    const queueResponse = await fetch(`${this.baseUrl}/prompt`, {
+    const queueResponse = await this.fetch(`${this.baseUrl}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: workflow })
@@ -91,7 +90,7 @@ export class ComfyUIProvider extends ImageProvider {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 1000))
 
-      const historyResponse = await fetch(`${this.baseUrl}/history/${promptId}`)
+      const historyResponse = await this.fetch(`${this.baseUrl}/history/${promptId}`)
       const history = await historyResponse.json()
 
       if (history[promptId]?.outputs) {
@@ -100,7 +99,7 @@ export class ComfyUIProvider extends ImageProvider {
         const imageNode = Object.values(outputs).find(o => o.images)
         if (imageNode?.images?.[0]) {
           const img = imageNode.images[0]
-          const imageResponse = await fetch(`${this.baseUrl}/view?filename=${img.filename}&subfolder=${img.subfolder || ''}&type=output`)
+          const imageResponse = await this.fetch(`${this.baseUrl}/view?filename=${img.filename}&subfolder=${img.subfolder || ''}&type=output`)
           const buffer = await imageResponse.arrayBuffer()
           return Buffer.from(buffer).toString('base64')
         }
@@ -118,7 +117,7 @@ export class ComfyUIProvider extends ImageProvider {
 
   async getModels() {
     try {
-      const response = await fetch(`${this.baseUrl}/object_info/CheckpointLoaderSimple`)
+      const response = await this.fetch(`${this.baseUrl}/object_info/CheckpointLoaderSimple`)
       const data = await response.json()
       const models = data.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || []
       return models.map(m => ({ id: m, name: m, type: 'local' }))
@@ -132,7 +131,7 @@ export class ComfyUIProvider extends ImageProvider {
 
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseUrl}/system_stats`)
+      const response = await this.fetch(`${this.baseUrl}/system_stats`)
       return { ok: response.ok, status: response.status }
     } catch (e) {
       return { ok: false, error: e.message }
