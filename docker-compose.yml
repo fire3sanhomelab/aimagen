@@ -6,8 +6,8 @@ services:
       context: ./backend
       dockerfile: docker/Dockerfile
     container_name: aimagen-backend
-    ports:
-      - "3457:3456"
+    expose:
+      - "3456"
     environment:
       - PORT=3456
       - AI_IMAGE_PROVIDER=${AI_IMAGE_PROVIDER:-opencode-go}
@@ -22,23 +22,30 @@ services:
       - ./backend/public/gallery:/app/public/gallery
     restart: unless-stopped
     networks:
-      - aimagen
+      - proxy-network
+    labels:
+      - "traefik.enable=false"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: docker/Dockerfile
     container_name: aimagen
-    ports:
-      - "3002:80"
+    expose:
+      - "80"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
     networks:
-      - aimagen
+      - proxy-network
     depends_on:
       - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.aimagen.rule=Host(`homelab.fire3san.duckdns.org`) && PathPrefix(`/aimagen`)"
+      - "traefik.http.routers.aimagen.middlewares=auto-strip-prefix@file"
+      - "traefik.http.services.aimagen.loadbalancer.server.port=80"
 
 networks:
-  aimagen:
-    driver: bridge
+  proxy-network:
+    external: true
