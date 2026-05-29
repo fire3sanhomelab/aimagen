@@ -45,14 +45,24 @@ export function listProviders() {
 }
 
 /**
- * Check health of all providers
+ * Check health of all providers (parallel, 5s timeout each)
  */
 export async function healthCheckAll() {
   const results = {}
-  for (const [name, ProviderClass] of Object.entries(providerRegistry)) {
+  const providers = Object.entries(providerRegistry).map(async ([name, ProviderClass]) => {
     const instance = new ProviderClass()
-    results[name] = await instance.healthCheck()
-  }
+    try {
+      // 5-second timeout per provider so health check completes fast
+      const result = await Promise.race([
+        instance.healthCheck(),
+        new Promise(resolve => setTimeout(() => resolve({ ok: false, error: 'timeout' }), 5000))
+      ])
+      results[name] = result
+    } catch (e) {
+      results[name] = { ok: false, error: e.message }
+    }
+  })
+  await Promise.all(providers)
   return results
 }
 

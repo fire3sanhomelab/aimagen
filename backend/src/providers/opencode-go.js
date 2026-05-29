@@ -86,6 +86,9 @@ export class OpencodeGoProvider extends ImageProvider {
   }
 
   async healthCheck() {
+    if (!this.apiKey) {
+      return { ok: false, error: 'no API key configured' }
+    }
     try {
       const response = await this.fetch(`${this.baseUrl}/v1/models`, {
         headers: { 'Authorization': `Bearer ${this.apiKey}` }
